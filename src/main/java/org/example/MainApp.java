@@ -11,70 +11,48 @@ import java.util.List;
 public class MainApp extends JFrame {
 
     private JMenuBar menuBar;
-
     private JMenu menuFiles;
     private JMenuItem miConnect;
     private JMenuItem miDisconnect;
     private JMenuItem miExit;
-
     private JMenu menuOptions;
     private JMenuItem miSetRoot;
     private JMenuItem miSetDest;
     private JMenuItem miExcludeSubfolders;
     private JMenuItem miExcludeMasks;
-
     private JMenu menuHelp;
     private JMenuItem miAbout;
-
     private JTextField txtSearch;
     private JButton btnSearch;
-
-    // ---- "Search Results" Tablosu ----
     private JTable tblResults;
     private DefaultTableModel tblModel;
-
-    // ---- "Active Downloads" Tablosu ----
     private JTable tblDownloads;
     private DefaultTableModel downloadModel;
-
     private JButton btnDownload;
-
     private File rootFolder;
     private File destinationFolder;
-
     private P2PNode p2pNode;
-
     private Set<File> excludedSubfolders;
     private List<String> excludedDownloadMasks;
-
-    // Map: fileHash -> tablo satır index (aktif indirmeler)
     private Map<String,Integer> downloadRowMap;
 
     public MainApp() {
         super("P2P File Sharing App");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(900, 600);
-
         p2pNode = new P2PNode();
-        // Önemli: MainApp bu P2PNode'a "referans" verirse,
-        // P2PNode -> MainApp'te progress bildiriminde bulunabilir.
-        // Örneğin p2pNode.setGuiRef(this); (Göstereceğiz)
-
         excludedSubfolders = new HashSet<>();
         excludedDownloadMasks = new ArrayList<>();
         downloadRowMap = new HashMap<>();
 
         initMenu();
         initLayout();
-
-        // GUI referansını p2pNode'a verelim (indirme ilerlemesi callback için)
         p2pNode.setGuiRef(this);
     }
 
     private void initMenu() {
         menuBar = new JMenuBar();
 
-        // ---- FILES menüsü ----
         menuFiles = new JMenu("Files");
         miConnect = new JMenuItem("Connect");
         miConnect.addActionListener(e -> onConnect());
@@ -90,7 +68,6 @@ public class MainApp extends JFrame {
         menuFiles.addSeparator();
         menuFiles.add(miExit);
 
-        // ---- OPTIONS menüsü ----
         menuOptions = new JMenu("Options");
         miSetRoot = new JMenuItem("Set Root Folder");
         miSetRoot.addActionListener(e -> chooseRootFolder());
@@ -106,8 +83,6 @@ public class MainApp extends JFrame {
         menuOptions.addSeparator();
         menuOptions.add(miExcludeSubfolders);
         menuOptions.add(miExcludeMasks);
-
-        // ---- HELP menüsü ----
         menuHelp = new JMenu("Help");
         miAbout = new JMenuItem("About");
         miAbout.addActionListener(e -> showAboutDialog());
@@ -121,19 +96,14 @@ public class MainApp extends JFrame {
     }
 
     private void initLayout() {
-        // Üst panel: Search
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         txtSearch = new JTextField(20);
         btnSearch = new JButton("Search");
         btnSearch.addActionListener(e -> onSearch());
-
         topPanel.add(new JLabel("Search:"));
         topPanel.add(txtSearch);
         topPanel.add(btnSearch);
-
         add(topPanel, BorderLayout.NORTH);
-
-        // Orta panel -> arama sonuçları
         tblModel = new DefaultTableModel(new String[]{"File Name", "File Hash", "File Size"}, 0) {
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -141,8 +111,6 @@ public class MainApp extends JFrame {
         };
         tblResults = new JTable(tblModel);
         JScrollPane scrollResults = new JScrollPane(tblResults);
-
-        // "Aktif İndirmeler" tablosu
         downloadModel = new DefaultTableModel(new String[]{"File Hash", "Progress (%)"}, 0) {
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -150,24 +118,17 @@ public class MainApp extends JFrame {
         };
         tblDownloads = new JTable(downloadModel);
         JScrollPane scrollDownloads = new JScrollPane(tblDownloads);
-
-        // SplitPane -> solda arama sonuçları, sağda aktif indirmeler (örnek)
         JSplitPane splitPane = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
                 scrollResults,
                 scrollDownloads
         );
         splitPane.setDividerLocation(500);
-
         add(splitPane, BorderLayout.CENTER);
-
-        // Altta Download butonu
         btnDownload = new JButton("Download Selected");
         btnDownload.addActionListener(e -> onDownloadSelected());
         add(btnDownload, BorderLayout.SOUTH);
     }
-
-    // -------------- Root & Destination Folder --------------
     private void chooseRootFolder() {
         JFileChooser fc = new JFileChooser();
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -187,8 +148,7 @@ public class MainApp extends JFrame {
         if (result == JFileChooser.APPROVE_OPTION) {
             destinationFolder = fc.getSelectedFile();
             p2pNode.setDestinationFolder(destinationFolder);
-            JOptionPane.showMessageDialog(this,
-                    "Destination folder set: " + destinationFolder.getAbsolutePath());
+            JOptionPane.showMessageDialog(this, "Destination folder set: " + destinationFolder.getAbsolutePath());
         }
     }
 
@@ -196,17 +156,13 @@ public class MainApp extends JFrame {
     private void excludeSubfoldersDialog() {
         if (rootFolder == null) {
             JOptionPane.showMessageDialog(this,
-                    "Root folder not set!",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
+                    "Root folder not set!", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
         List<File> subFolders = findSubfolders(rootFolder);
         if (subFolders.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "No subfolders found under root.",
-                    "Info",
-                    JOptionPane.INFORMATION_MESSAGE);
+                    "No subfolders found under root.", "Info", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
@@ -219,9 +175,7 @@ public class MainApp extends JFrame {
 
         int choice = JOptionPane.showConfirmDialog(
                 this,
-                new JScrollPane(jList),
-                "Select Subfolders to Exclude from Sharing",
-                JOptionPane.OK_CANCEL_OPTION
+                new JScrollPane(jList), "Select Subfolders to Exclude from Sharing", JOptionPane.OK_CANCEL_OPTION
         );
         if (choice == JOptionPane.OK_OPTION) {
             List<File> selected = jList.getSelectedValuesList();
@@ -248,11 +202,7 @@ public class MainApp extends JFrame {
 
     private void excludeMasksDialog() {
         String existing = String.join(";", excludedDownloadMasks);
-        String input = JOptionPane.showInputDialog(
-                this,
-                "Enter file masks to exclude (separate by semicolon):",
-                existing
-        );
+        String input = JOptionPane.showInputDialog(this, "Enter file masks to exclude (separate by semicolon):", existing);
         if (input != null) {
             excludedDownloadMasks.clear();
             String[] parts = input.split(";");
@@ -262,12 +212,10 @@ public class MainApp extends JFrame {
                     excludedDownloadMasks.add(trimmed);
                 }
             }
-            JOptionPane.showMessageDialog(this,
-                    "Updated exclude masks. Current: " + excludedDownloadMasks.toString());
+            JOptionPane.showMessageDialog(this, "Updated exclude masks. Current: " + excludedDownloadMasks.toString());
         }
     }
 
-    // -------------- Connect / Disconnect / Exit --------------
     private void onConnect() {
         p2pNode.connect();
         JOptionPane.showMessageDialog(this, "Connected to P2P overlay.");

@@ -94,12 +94,11 @@ public class Packet {
         int msgLen = msgBytes.length;
 
         int totalSize = 16
-                + 8 // fileSize
+                + 8
                 + 4 + sourceIpLen
                 + 4 + fileHashLen
                 + 4 + chunkDataLen
                 + 4 + msgLen;
-
         ByteBuffer buf = ByteBuffer.allocate(totalSize);
         buf.putInt(type.getCode());
         buf.putInt(seqNumber);

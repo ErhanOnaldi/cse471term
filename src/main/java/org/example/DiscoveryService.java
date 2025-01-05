@@ -1,5 +1,6 @@
 package org.example;
 
+import java.io.IOException;
 import java.net.*;
 import java.util.HashSet;
 import java.util.Set;
@@ -130,13 +131,19 @@ public class DiscoveryService implements Runnable {
             socket.close();
         }
     }
-
-    private String getLocalIP() {
-        try {
-            return InetAddress.getLocalHost().getHostAddress();
-        } catch (Exception e) {
+    public static String getEffectiveLocalIP() {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("google.com", 80), 3000);
+            return socket.getLocalAddress().getHostAddress();
+        } catch (IOException e) {
+            System.err.println("Failed to connect google, fallback to loopback: " + e.getMessage());
             return "127.0.0.1";
         }
+    }
+
+
+    private String getLocalIP() {
+       return getEffectiveLocalIP();
     }
 }
 
