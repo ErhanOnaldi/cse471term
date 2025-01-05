@@ -12,7 +12,6 @@ public class DiscoveryService implements Runnable {
     private final P2PNode node;
     private DatagramSocket socket;
     private final Set<String> seenPackets;
-
     private final long broadcastIntervalMs = 5000;
 
     public DiscoveryService(P2PNode node, int port) {
@@ -38,8 +37,7 @@ public class DiscoveryService implements Runnable {
                     socket.receive(dp);
 
                     Packet pkt = Packet.fromBytes(dp.getData());
-                    String sourceKey = dp.getAddress().getHostAddress() + ":" + pkt.getSeqNumber();
-
+                    String sourceKey = pkt.getNodeId() + ":" + pkt.getSeqNumber();
                     if (!seenPackets.contains(sourceKey)) {
                         seenPackets.add(sourceKey);
 
@@ -74,6 +72,11 @@ public class DiscoveryService implements Runnable {
     }
 
     private boolean shouldForward(Packet pkt) {
+        if (pkt.getTtl() <= 0) return false;
+        if (pkt.getSourceIP().equalsIgnoreCase(getLocalIP())) {
+            return false;
+        }
+
         switch (pkt.getType()) {
             case DISCOVERY:
             case SEARCH:

@@ -1,4 +1,5 @@
 package org.example;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,7 +20,9 @@ public class Packet {
         public int getCode() { return code; }
         public static PacketType fromCode(int c) {
             for (PacketType pt : values()) {
-                if (pt.code == c) return pt;
+                if (pt.code == c) {
+                    return pt;
+                }
             }
             return OTHER;
         }
@@ -41,6 +44,9 @@ public class Packet {
 
     private long fileSize;
 
+    // *** YENİ ALAN ***
+    private String nodeId; // Hangi node'un paketi?
+
     public Packet() {
         this.type = PacketType.OTHER;
         this.seqNumber = 0;
@@ -51,6 +57,7 @@ public class Packet {
         this.chunkData = null;
         this.message = "";
         this.fileSize = 0;
+        this.nodeId = "";
     }
 
     public Packet(PacketType type, int ttl, String sourceIP) {
@@ -61,7 +68,7 @@ public class Packet {
         this.sourceIP = (sourceIP != null) ? sourceIP : "";
     }
 
-    // Getter setter
+    // Getter / Setter
     public PacketType getType() { return type; }
     public void setType(PacketType t) { this.type = t; }
     public int getSeqNumber() { return seqNumber; }
@@ -81,6 +88,14 @@ public class Packet {
     public long getFileSize() { return fileSize; }
     public void setFileSize(long fs) { this.fileSize = fs; }
 
+    public String getNodeId() {
+        return nodeId;
+    }
+
+    public void setNodeId(String nodeId) {
+        this.nodeId = nodeId;
+    }
+
     public byte[] toBytes() {
         byte[] sourceIPBytes = sourceIP.getBytes(StandardCharsets.UTF_8);
         int sourceIpLen = sourceIPBytes.length;
@@ -93,76 +108,106 @@ public class Packet {
         byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
         int msgLen = msgBytes.length;
 
+        byte[] nodeIdBytes = (nodeId != null) ? nodeId.getBytes(StandardCharsets.UTF_8) : new byte[0];
+        int nodeIdLen = nodeIdBytes.length;
+
         int totalSize = 16
                 + 8
                 + 4 + sourceIpLen
                 + 4 + fileHashLen
                 + 4 + chunkDataLen
-                + 4 + msgLen;
-        ByteBuffer buf = ByteBuffer.allocate(totalSize);
-        buf.putInt(type.getCode());
-        buf.putInt(seqNumber);
-        buf.putInt(ttl);
-        buf.putInt(chunkIndex);
-        buf.putLong(fileSize);
+                + 4 + msgLen
+                + 4 + nodeIdLen;
 
-        buf.putInt(sourceIpLen);
-        buf.put(sourceIPBytes);
+        ByteBuffer buffer = ByteBuffer.allocate(totalSize);
 
-        buf.putInt(fileHashLen);
-        buf.put(fileHashBytes);
+        buffer.putInt(type.getCode());
+        buffer.putInt(seqNumber);
+        buffer.putInt(ttl);
+        buffer.putInt(chunkIndex);
+        buffer.putLong(fileSize);
 
-        buf.putInt(chunkDataLen);
+        buffer.putInt(sourceIpLen);
+        buffer.put(sourceIPBytes);
+
+        buffer.putInt(fileHashLen);
+        buffer.put(fileHashBytes);
+
+        buffer.putInt(chunkDataLen);
         if (chunkDataLen > 0) {
-            buf.put(chunkData);
+            buffer.put(chunkData);
         }
 
-        buf.putInt(msgLen);
-        buf.put(msgBytes);
+        buffer.putInt(msgLen);
+        buffer.put(msgBytes);
 
-        return buf.array();
+
+        buffer.putInt(nodeIdLen);
+        if (nodeIdLen > 0) {
+            buffer.put(nodeIdBytes);
+        }
+
+        return buffer.array();
     }
 
     public static Packet fromBytes(byte[] data) {
         Packet pkt = new Packet();
         try {
-            ByteBuffer buf = ByteBuffer.wrap(data);
+            ByteBuffer buffer = ByteBuffer.wrap(data);
 
-            int tcode = buf.getInt();
-            pkt.type = PacketType.fromCode(tcode);
+            int typeCode = buffer.getInt();
+            pkt.type = PacketType.fromCode(typeCode);
 
-            pkt.seqNumber = buf.getInt();
-            pkt.ttl = buf.getInt();
-            pkt.chunkIndex = buf.getInt();
-            pkt.fileSize = buf.getLong();
+            pkt.seqNumber = buffer.getInt();
+            pkt.ttl = buffer.getInt();
+            pkt.chunkIndex = buffer.getInt();
+            pkt.fileSize = buffer.getLong();
 
-            int sourceIpLen = buf.getInt();
+            int sourceIpLen = buffer.getInt();
             if (sourceIpLen > 0) {
                 byte[] sip = new byte[sourceIpLen];
-                buf.get(sip);
+                buffer.get(sip);
                 pkt.sourceIP = new String(sip, StandardCharsets.UTF_8);
+            } else {
+                pkt.sourceIP = "";
             }
 
-            int fileHashLen = buf.getInt();
+            int fileHashLen = buffer.getInt();
             if (fileHashLen > 0) {
                 byte[] fh = new byte[fileHashLen];
-                buf.get(fh);
+                buffer.get(fh);
                 pkt.fileHash = new String(fh, StandardCharsets.UTF_8);
+            } else {
+                pkt.fileHash = "";
             }
 
-            int chunkDataLen = buf.getInt();
+            int chunkDataLen = buffer.getInt();
             if (chunkDataLen > 0) {
-                byte[] cd = new byte[chunkDataLen];
-                buf.get(cd);
-                pkt.chunkData = cd;
+                byte[] cdata = new byte[chunkDataLen];
+                buffer.get(cdata);
+                pkt.chunkData = cdata;
+            } else {
+                pkt.chunkData = null;
             }
 
-            int msgLen = buf.getInt();
+            int msgLen = buffer.getInt();
             if (msgLen > 0) {
                 byte[] msgb = new byte[msgLen];
-                buf.get(msgb);
+                buffer.get(msgb);
                 pkt.message = new String(msgb, StandardCharsets.UTF_8);
+            } else {
+                pkt.message = "";
             }
+
+            int nodeIdLen = buffer.getInt();
+            if (nodeIdLen > 0) {
+                byte[] nid = new byte[nodeIdLen];
+                buffer.get(nid);
+                pkt.nodeId = new String(nid, StandardCharsets.UTF_8);
+            } else {
+                pkt.nodeId = "";
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }

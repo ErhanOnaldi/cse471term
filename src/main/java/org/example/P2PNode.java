@@ -11,7 +11,7 @@ public class P2PNode {
     private File rootFolder;
     private File destinationFolder;
     private boolean isConnected;
-
+    private String nodeId;
     private DiscoveryService discoveryService;
     private Thread discoveryThread;
     private DatagramSocket udpSocket;
@@ -28,6 +28,7 @@ public class P2PNode {
     private MainApp guiRef;
 
     public P2PNode() {
+        this.nodeId = UUID.randomUUID().toString();
         this.sharedFiles = new HashMap<>();
         this.activeDownloads = new HashMap<>();
         this.executor = Executors.newCachedThreadPool();
@@ -149,6 +150,9 @@ public class P2PNode {
     }
 
     public void handleIncomingPacket(Packet pkt) {
+        if (pkt.getNodeId().equalsIgnoreCase(this.nodeId)) {
+            return;
+        }
         System.out.println(">> [P2PNode] Received " + pkt.getType()
                 + " seq=" + pkt.getSeqNumber()
                 + " ttl=" + pkt.getTtl()
@@ -180,6 +184,7 @@ public class P2PNode {
     }
 
     private void handleSearchRequest(Packet pkt) {
+        if (pkt.getSourceIP().equalsIgnoreCase(getLocalIP())) {return;}
         String query = pkt.getMessage().toLowerCase();
         List<FileMetadata> results = new ArrayList<>();
         for (FileMetadata fm : sharedFiles.values()) {
@@ -311,6 +316,7 @@ public class P2PNode {
 
     public void searchFile(String query) {
         Packet p = new Packet(Packet.PacketType.SEARCH, 2, getLocalIP());
+        p.setNodeId(nodeId);
         p.setMessage(query);
         sendUDP(p, "255.255.255.255", discoveryPort);
         System.out.println("[P2PNode] Sent SEARCH -> " + query);
@@ -349,10 +355,7 @@ public class P2PNode {
     }
 
     private String getLocalIP() {
-        try {
-            return InetAddress.getLocalHost().getHostAddress();
-        } catch (Exception e) {
-            return "127.0.0.1";
-        }
+        return DiscoveryService.getEffectiveLocalIP();
     }
+
 }

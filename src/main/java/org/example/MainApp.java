@@ -284,14 +284,12 @@ public class MainApp extends JFrame {
         String fileHash = (String) tblModel.getValueAt(row, 1);
         String fileSizeStr = (String) tblModel.getValueAt(row, 2);
 
-        // Mask kontrolü
         if (matchesExcludeMask(fileName)) {
             JOptionPane.showMessageDialog(this,
                     "This file is excluded by download mask!\n(" + fileName + ")");
             return;
         }
 
-        // Dosya boyutu bilinmiyorsa, dummy 2MB
         long size;
         try {
             size = Long.parseLong(fileSizeStr);
@@ -299,13 +297,9 @@ public class MainApp extends JFrame {
             size = 2L * 1024L * 1024L;
         }
 
-        // 1) Tablomuza "0%" indirme satırı ekleyelim
-        //    Sütunlar: "File Hash", "Progress (%)"
         int newRow = downloadModel.getRowCount();
         downloadModel.addRow(new Object[]{ fileHash, "0.0" });
         downloadRowMap.put(fileHash, newRow);
-
-        // 2) İndirmeyi başlat
         p2pNode.downloadFile(fileHash, size);
         JOptionPane.showMessageDialog(this,
                 "Download started for: " + fileName + "\nHash=" + fileHash);
@@ -331,24 +325,12 @@ public class MainApp extends JFrame {
         }
         return false;
     }
-
-    // -------------- (YENİ) Indirme Progress Güncellemesi --------------
-    /**
-     * P2PNode veya DownloadManager bu metodu çağırarak
-     * GUI tarafında indirme yüzdesini günceller.
-     */
     public void updateDownloadProgress(String fileHash, double percent) {
-        // Bu metot, indirme ilerlemesini tabloya yansıtacak
-        // Swing thread'inde çalışmayı garanti edelim:
         SwingUtilities.invokeLater(() -> {
-            // tablodaki satırı bul
             Integer rowIndex = downloadRowMap.get(fileHash);
             if (rowIndex == null) {
-                // Bu hash tabloya eklenmemiş, belki multi-source vs.
-                // isterseniz otomatik ekleyebilirsiniz, ama şu an yok sayıyoruz.
                 return;
             }
-            // Sütun 1 -> "Progress (%)"
             downloadModel.setValueAt(String.format("%.2f", percent), rowIndex, 1);
         });
     }
