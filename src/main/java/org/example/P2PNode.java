@@ -1,16 +1,11 @@
 package org.example;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Ana node yönetim sınıfı.
- * - DiscoveryService başlatma, paylaşılan dosyaları tarama,
- * - Packet'ları karşılama, chunk request/response, search, vs.
- * - GUI'ye (MainApp) callback yapma ("search results" gösterme).
- */
 public class P2PNode {
 
     private File rootFolder;
@@ -24,15 +19,12 @@ public class P2PNode {
     private final int discoveryPort = 55555;
     private final int chunkTransferPort = 55556;
 
-    private final Map<String, FileMetadata> sharedFiles;    // fileHash -> metadata
-    private final Map<String, DownloadManager> activeDownloads;
-
+    private final Map<String, FileMetadata> sharedFiles;
+    private Map<String, DownloadManager> activeDownloads = new HashMap<>();
+    private final Map<String, Set<PeerInfo>> filePeers = new HashMap<>();
     private final ExecutorService executor;
 
-    // BONUS: Hariç tutulan alt klasörler
     private Set<File> excludedSubfolders;
-
-    // GUI callback: MainApp referansı
     private MainApp guiRef;
 
     public P2PNode() {
@@ -42,7 +34,6 @@ public class P2PNode {
         this.excludedSubfolders = new HashSet<>();
     }
 
-    // Bu metotla MainApp'i kaydederiz. Oradan tablo güncellenir.
     public void setGuiRef(MainApp gui) {
         this.guiRef = gui;
     }
@@ -51,15 +42,12 @@ public class P2PNode {
         if (isConnected) return;
         System.out.println("[P2PNode] Connecting...");
 
-        // Dosyaları paylaşıma ekle
         shareLocalFiles();
 
-        // DiscoveryService
         discoveryService = new DiscoveryService(this, discoveryPort);
         discoveryThread = new Thread(discoveryService, "DiscoveryServiceThread");
         discoveryThread.start();
 
-        // Chunk transfer portu
         try {
             udpSocket = new DatagramSocket(chunkTransferPort);
             executor.submit(this::chunkListener);
@@ -103,9 +91,6 @@ public class P2PNode {
         System.out.println("[P2PNode] Shutdown complete.");
     }
 
-    // ------------------------------------------------------------------
-    // Root / Destination
-    // ------------------------------------------------------------------
     public void setRootFolder(File root) {
         this.rootFolder = root;
     }
@@ -124,9 +109,6 @@ public class P2PNode {
         this.excludedSubfolders = excluded;
     }
 
-    // ------------------------------------------------------------------
-    // Paylaşılan dosyalar
-    // ------------------------------------------------------------------
     private void shareLocalFiles() {
         sharedFiles.clear();
         if (rootFolder == null || !rootFolder.isDirectory()) {
@@ -137,7 +119,6 @@ public class P2PNode {
     }
 
     private void shareLocalFilesRecursive(File dir) {
-        // Hariç tutulan klasör mü?
         if (isFolderExcluded(dir)) {
             return;
         }
@@ -164,9 +145,6 @@ public class P2PNode {
         return false;
     }
 
-    // ------------------------------------------------------------------
-    // Gelen paketleri işleme
-    // ------------------------------------------------------------------
     public void handleIncomingPacket(Packet pkt) {
         System.out.println(">> [P2PNode] Received " + pkt.getType()
                 + " seq=" + pkt.getSeqNumber()
@@ -175,7 +153,6 @@ public class P2PNode {
 
         switch (pkt.getType()) {
             case DISCOVERY:
-                // opsiyonel -> DISCOVERY_RESPONSE
                 break;
 
             case SEARCH:
@@ -195,14 +172,10 @@ public class P2PNode {
                 break;
 
             default:
-                // Other
                 break;
         }
     }
 
-    // ------------------------------------------------------------------
-    // SEARCH
-    // ------------------------------------------------------------------
     private void handleSearchRequest(Packet pkt) {
         String query = pkt.getMessage().toLowerCase();
         List<FileMetadata> results = new ArrayList<>();
@@ -212,7 +185,6 @@ public class P2PNode {
             }
         }
         if (!results.isEmpty()) {
-            // Yanıt: her satıra "filename|hash|size"
             StringBuilder sb = new StringBuilder();
             for (FileMetadata fm : results) {
                 sb.append(fm.getFileName()).append("|")
@@ -222,26 +194,34 @@ public class P2PNode {
             Packet resp = new Packet(Packet.PacketType.SEARCH_RESPONSE, 1, getLocalIP());
             resp.setMessage(sb.toString());
             resp.setSeqNumber(Packet.getNextSeqNumber());
-
-            // Unicast geri gönder
             sendUDP(resp, pkt.getSourceIP(), discoveryPort);
         }
     }
 
     private void handleSearchResponse(Packet pkt) {
-        // "filename|hash|size\nfilename2|hash2|size2\n..."
+        // format: "filename|hash|size\nfilename2|hash2|size2\n..."
         String data = pkt.getMessage();
-        System.out.println("[P2PNode] Got SEARCH_RESPONSE:\n" + data);
+        String[] lines = data.split("\n");
+        for (String line : lines) {
+            if (line.trim().isEmpty()) continue;
+            String[] parts = line.split("\\|");
+            if (parts.length >= 3) {
+                String fName = parts[0];
+                String fHash = parts[1];
+                long fSize = Long.parseLong(parts[2]);
 
-        // GUI güncellemesi
+                // Bu peer, bu dosyaya sahip
+                Set<PeerInfo> peers = filePeers.getOrDefault(fHash, new HashSet<>());
+                peers.add(new PeerInfo(pkt.getSourceIP(), fSize));
+                filePeers.put(fHash, peers);
+            }
+        }
+        // GUI'ye yansıt
         if (guiRef != null) {
             guiRef.addSearchResults(data);
         }
     }
 
-    // ------------------------------------------------------------------
-    // CHUNK_REQUEST (upload)
-    // ------------------------------------------------------------------
     private void handleChunkRequest(Packet pkt) {
         String hash = pkt.getFileHash();
         int index = pkt.getChunkIndex();
@@ -256,11 +236,8 @@ public class P2PNode {
         resp.setFileHash(hash);
         resp.setChunkIndex(index);
         resp.setChunkData(chunkData);
-
-        // Dosya boyutu da ekleyebiliriz (indirme manager belki kullanır)
         resp.setFileSize(fm.getFileSize());
 
-        // Geri gönder
         sendUDP(resp, pkt.getSourceIP(), chunkTransferPort);
         System.out.println("[P2PNode] Sent CHUNK_RESPONSE (hash=" + hash
                 + ", chunk=" + index + ") to " + pkt.getSourceIP());
@@ -272,7 +249,7 @@ public class P2PNode {
         if (offset >= file.length()) {
             return new byte[0];
         }
-        int toRead = (int)Math.min(CHUNK_SIZE, file.length() - offset);
+        int toRead = (int) Math.min(CHUNK_SIZE, file.length() - offset);
         byte[] buffer = new byte[toRead];
         try (FileInputStream fis = new FileInputStream(file)) {
             fis.skip(offset);
@@ -283,26 +260,23 @@ public class P2PNode {
         return buffer;
     }
 
-    // ------------------------------------------------------------------
-    // CHUNK_RESPONSE (download)
-    // ------------------------------------------------------------------
     private void handleChunkResponse(Packet pkt) {
         String hash = pkt.getFileHash();
-        int index = pkt.getChunkIndex();
-        byte[] data = pkt.getChunkData();
-
         DownloadManager dm = activeDownloads.get(hash);
         if (dm != null) {
-            dm.handleChunkData(index, data);
+            dm.handleChunkData(pkt.getChunkIndex(), pkt.getChunkData());
         } else {
-            System.out.println("[P2PNode] No active download for " + hash);
+            System.out.println("[P2PNode] No active download for hash=" + hash);
         }
     }
 
-    // ------------------------------------------------------------------
-    // DOWNLOAD
-    // ------------------------------------------------------------------
     public void downloadFile(String fileHash, long fileSize) {
+        // Varsayılan: Tek kaynak
+        // multiSource = false, peers = boş set
+        downloadFile(fileHash, fileSize, false, Collections.emptySet());
+    }
+
+    public void downloadFile(String fileHash, long fileSize, boolean multiSource, Set<PeerInfo> peers) {
         if (destinationFolder == null) {
             System.out.println("[P2PNode] Destination folder not set!");
             return;
@@ -311,8 +285,17 @@ public class P2PNode {
             System.out.println("[P2PNode] Already downloading: " + fileHash);
             return;
         }
-        DownloadManager dm = new DownloadManager(this, fileHash, fileSize, destinationFolder);
+
+        DownloadManager dm;
+        if (multiSource && peers != null && !peers.isEmpty()) {
+            dm = new MultiSourceDownloadManager(this, fileHash, fileSize, destinationFolder, peers);
+            System.out.println("[P2PNode] Creating MultiSourceDownloadManager for hash=" + fileHash);
+        } else {
+            dm = new DownloadManager(this, fileHash, fileSize, destinationFolder);
+            System.out.println("[P2PNode] Creating single-source DownloadManager for hash=" + fileHash);
+        }
         activeDownloads.put(fileHash, dm);
+
         executor.submit(dm::startDownload);
     }
 
@@ -323,9 +306,6 @@ public class P2PNode {
         sendUDP(req, ip, chunkTransferPort);
     }
 
-    // ------------------------------------------------------------------
-    // SEARCH Gönder
-    // ------------------------------------------------------------------
     public void searchFile(String query) {
         Packet p = new Packet(Packet.PacketType.SEARCH, 2, getLocalIP());
         p.setMessage(query);
@@ -333,9 +313,6 @@ public class P2PNode {
         System.out.println("[P2PNode] Sent SEARCH -> " + query);
     }
 
-    // ------------------------------------------------------------------
-    // Yardımcı
-    // ------------------------------------------------------------------
     private void sendUDP(Packet pkt, String ip, int port) {
         try {
             byte[] data = pkt.toBytes();

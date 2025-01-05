@@ -3,10 +3,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * P2P'te discovery, search, chunk transfer gibi bütün paketleri tek formatla
- * temsil eden sınıf.
- */
 public class Packet {
 
     public enum PacketType {
@@ -43,7 +39,7 @@ public class Packet {
     private byte[] chunkData;
     private String message;
 
-    private long fileSize; // Arama yanıtlarında veya chunk protokolünde boyut taşımak için
+    private long fileSize;
 
     public Packet() {
         this.type = PacketType.OTHER;
@@ -65,7 +61,7 @@ public class Packet {
         this.sourceIP = (sourceIP != null) ? sourceIP : "";
     }
 
-    // Get / set
+    // Getter setter
     public PacketType getType() { return type; }
     public void setType(PacketType t) { this.type = t; }
     public int getSeqNumber() { return seqNumber; }
@@ -85,7 +81,6 @@ public class Packet {
     public long getFileSize() { return fileSize; }
     public void setFileSize(long fs) { this.fileSize = fs; }
 
-    // ------------------- toBytes() -------------------
     public byte[] toBytes() {
         byte[] sourceIPBytes = sourceIP.getBytes(StandardCharsets.UTF_8);
         int sourceIpLen = sourceIPBytes.length;
@@ -98,9 +93,6 @@ public class Packet {
         byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
         int msgLen = msgBytes.length;
 
-        // 16 byte = type(4), seq(4), ttl(4), chunkIndex(4)
-        // + 8 byte = fileSize (long)
-        // + 4+X, 4+Y, 4+Z, 4+M => 4 adet "length" + X + Y + Z + M
         int totalSize = 16
                 + 8 // fileSize
                 + 4 + sourceIpLen
@@ -132,7 +124,6 @@ public class Packet {
         return buf.array();
     }
 
-    // ------------------- fromBytes() -------------------
     public static Packet fromBytes(byte[] data) {
         Packet pkt = new Packet();
         try {

@@ -31,7 +31,6 @@ public class DiscoveryService implements Runnable {
             long lastBroadcastTime = 0;
 
             while (running) {
-                // Gelen paketleri dinle
                 try {
                     byte[] buf = new byte[64 * 1024];
                     DatagramPacket dp = new DatagramPacket(buf, buf.length);
@@ -53,10 +52,9 @@ public class DiscoveryService implements Runnable {
                     }
 
                 } catch (SocketTimeoutException e) {
-                    // normal
+                    //asdasfamans
                 }
 
-                // Periyodik HELLO broadcast
                 long now = System.currentTimeMillis();
                 if (now - lastBroadcastTime > broadcastIntervalMs) {
                     broadcastHello();

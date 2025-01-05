@@ -1,22 +1,21 @@
 package org.example;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
 public class DownloadManager {
 
-    private final P2PNode node;
-    private final String fileHash;
-    private final long fileSize;
-    private final File destinationFolder;
+    protected final P2PNode node;
+    protected final String fileHash;
+    protected final long fileSize;
+    protected final File destinationFolder;
 
-    private int totalChunks;
-    private byte[][] chunkBuffers;
-    private int chunksReceived;
-    private boolean isDownloading;
+    protected int totalChunks;
+    protected byte[][] chunkBuffers;
+    protected int chunksReceived;
+    protected boolean isDownloading;
 
-    private String sourceIP = "127.0.0.1"; // basit senaryoda sabit
+    protected String sourceIP = "127.0.0.1";
 
     public DownloadManager(P2PNode node, String fileHash, long fileSize, File destFolder) {
         this.node = node;
@@ -29,26 +28,24 @@ public class DownloadManager {
         if (this.totalChunks <= 0) this.totalChunks = 1;
 
         this.chunkBuffers = new byte[totalChunks][];
-        this.isDownloading = false;
         this.chunksReceived = 0;
+        this.isDownloading = false;
     }
 
     public void startDownload() {
+        // Tek kaynak (sourceIP) yaklaşımı
         isDownloading = true;
         System.out.println("[DownloadManager] Start download hash=" + fileHash
                 + ", size=" + fileSize + ", totalChunks=" + totalChunks);
 
-        // Sırasıyla bütün chunk'ları iste
         for (int i = 0; i < totalChunks; i++) {
             node.requestChunk(sourceIP, fileHash, i);
             try {
-                Thread.sleep(50); // Yüksek trafikten kaçınmak için minik bekleme
+                Thread.sleep(50);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-
-        // "finalizeDownload" chunksReceived == totalChunks olduğunda çağrılacak
     }
 
     public synchronized void handleChunkData(int index, byte[] data) {
@@ -67,10 +64,10 @@ public class DownloadManager {
         }
     }
 
-    private void finalizeDownload() {
+    protected void finalizeDownload() {
         isDownloading = false;
-
         File outFile = new File(destinationFolder, fileHash + "_downloaded.dat");
+
         System.out.println("[DownloadManager] Writing to: " + outFile.getAbsolutePath());
         try (FileOutputStream fos = new FileOutputStream(outFile)) {
             for (byte[] cdata : chunkBuffers) {
@@ -84,3 +81,4 @@ public class DownloadManager {
         System.out.println("[DownloadManager] Download complete: hash=" + fileHash);
     }
 }
+
