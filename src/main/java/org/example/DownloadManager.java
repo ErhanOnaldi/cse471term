@@ -56,13 +56,21 @@ public class DownloadManager {
         chunksReceived++;
 
         double percent = (chunksReceived * 100.0) / totalChunks;
+
+        // 1) Konsol Log
         System.out.printf("[DownloadManager] chunk %d/%d (%.2f%%)\n",
                 chunksReceived, totalChunks, percent);
+
+        // 2) GUI'ye haber ver:
+        // node üstünden mainApp'e gideceğiz -> node.guiRef.updateDownloadProgress(fileHash, percent);
+
+        node.getGuiRef().updateDownloadProgress(fileHash, percent);
 
         if (chunksReceived == totalChunks) {
             finalizeDownload();
         }
     }
+
 
     protected void finalizeDownload() {
         isDownloading = false;

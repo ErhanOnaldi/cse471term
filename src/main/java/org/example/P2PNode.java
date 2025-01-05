@@ -37,6 +37,9 @@ public class P2PNode {
     public void setGuiRef(MainApp gui) {
         this.guiRef = gui;
     }
+    public MainApp getGuiRef() {
+        return this.guiRef;
+    }
 
     public synchronized void connect() {
         if (isConnected) return;
