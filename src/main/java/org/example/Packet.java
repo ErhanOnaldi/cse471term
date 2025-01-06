@@ -44,8 +44,8 @@ public class Packet {
 
     private long fileSize;
 
-    // *** YENİ ALAN ***
-    private String nodeId; // Hangi node'un paketi?
+
+    private String nodeId;
 
     public Packet() {
         this.type = PacketType.OTHER;
@@ -111,12 +111,7 @@ public class Packet {
         byte[] nodeIdBytes = (nodeId != null) ? nodeId.getBytes(StandardCharsets.UTF_8) : new byte[0];
         int nodeIdLen = nodeIdBytes.length;
 
-        int totalSize = 4 + 4 + 4 + 4 + 8 // type + seqNumber + ttl + chunkIndex + fileSize
-                + 4 + sourceIpLen
-                + 4 + fileHashLen
-                + 4 + chunkDataLen
-                + 4 + msgLen
-                + 4 + nodeIdLen;
+        int totalSize = 4 + 4 + 4 + 4 + 8 + 4 + sourceIpLen + 4 + fileHashLen + 4 + chunkDataLen + 4 + msgLen + 4 + nodeIdLen;
 
         ByteBuffer buffer = ByteBuffer.allocate(totalSize);
 

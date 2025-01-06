@@ -8,8 +8,7 @@ import java.util.concurrent.Executors;
 
 public class P2PNode {
 
-    // CHUNK_SIZE sabitini 4KB olarak tanımlayın
-    private static final int CHUNK_SIZE = 4 * 1024; // 4KB
+    private static final int CHUNK_SIZE = 4 * 1024;
 
     private File rootFolder;
     private File destinationFolder;
@@ -18,7 +17,7 @@ public class P2PNode {
     private DiscoveryService discoveryService;
     private Thread discoveryThread;
     private DatagramSocket udpSocket;
-
+    private final Set<PeerInfo> discoveredPeers = new HashSet<>();
     private final int discoveryPort = 55555;
     private final int chunkTransferPort = 55556;
 
@@ -46,7 +45,6 @@ public class P2PNode {
         return this.guiRef;
     }
 
-    // nodeId getter'ı
     public String getNodeId() {
         return nodeId;
     }
@@ -162,7 +160,7 @@ public class P2PNode {
 
     public void handleIncomingPacket(Packet pkt) {
         if (pkt.getNodeId().equalsIgnoreCase(this.nodeId)) {
-            return; // Kendi paketini işlemeden çık
+            return;
         }
         System.out.println(">> [P2PNode] Received " + pkt.getType()
                 + " seq=" + pkt.getSeqNumber()
@@ -197,8 +195,20 @@ public class P2PNode {
     }
 
     private void handleDiscovery(Packet pkt) {
-        // Discovery paketini işleyin (örn. HELLO)
-        // Örnek olarak, sadece loglayın veya gerekirse forward edin
+        String sourceIP = pkt.getSourceIP();
+        String sourceNodeId = pkt.getNodeId();
+        System.out.println("[P2PNode] Handling Discovery from " + sourceIP + " [nodeId=" + sourceNodeId + "]");
+        if (sourceNodeId.equalsIgnoreCase(this.nodeId)) {
+            return;
+        }
+        if (!sourceNodeId.equals(this.nodeId)) {
+            PeerInfo peer = new PeerInfo(sourceIP, 0);
+            if (!discoveredPeers.contains(peer)) {
+                discoveredPeers.add(peer);
+                System.out.println("[P2PNode] Discovered new peer: " + peer.getIpAddress());
+
+            }
+        }
     }
 
     private void handleSearchRequest(Packet pkt) {
@@ -220,14 +230,13 @@ public class P2PNode {
             Packet resp = new Packet(Packet.PacketType.SEARCH_RESPONSE, 1, getLocalIP());
             resp.setMessage(sb.toString());
             resp.setSeqNumber(Packet.getNextSeqNumber());
-            // nodeId'yi ayarla
             resp.setNodeId(this.nodeId);
             sendUDP(resp, pkt.getSourceIP(), discoveryPort);
         }
     }
 
     private void handleSearchResponse(Packet pkt) {
-        // format: "filename|hash|size\nfilename2|hash2|size2\n..."
+
         String data = pkt.getMessage();
         String[] lines = data.split("\n");
         for (String line : lines) {
@@ -238,13 +247,11 @@ public class P2PNode {
                 String fHash = parts[1];
                 long fSize = Long.parseLong(parts[2]);
 
-                // Bu peer, bu dosyaya sahip
                 Set<PeerInfo> peers = filePeers.getOrDefault(fHash, new HashSet<>());
                 peers.add(new PeerInfo(pkt.getSourceIP(), fSize));
                 filePeers.put(fHash, peers);
             }
         }
-        // GUI'ye yansıt
         if (guiRef != null) {
             guiRef.addSearchResults(data);
         }
@@ -260,13 +267,11 @@ public class P2PNode {
         }
         byte[] chunkData = readChunkFromFile(fm.getFile(), chunkIndex);
 
-        // CHUNK_SIZE'ı küçük tuttuğunuz için artık paket boyutu sınırını aştığınızdan emin olun
         Packet resp = new Packet(Packet.PacketType.CHUNK_RESPONSE, 1, getLocalIP());
         resp.setFileHash(hash);
         resp.setChunkIndex(chunkIndex);
         resp.setChunkData(chunkData);
         resp.setFileSize(fm.getFileSize());
-        // nodeId'yi ayarla
         resp.setNodeId(this.nodeId);
 
         try {
@@ -304,17 +309,14 @@ public class P2PNode {
         }
     }
 
-    // Yeni yardımcı metod: filePeers içinden o dosyayı paylaşan peer set'ini döndürür
     public Set<PeerInfo> getPeersForFile(String fileHash) {
         return filePeers.getOrDefault(fileHash, Collections.emptySet());
     }
 
-    // Tek parametreli downloadFile:
     public void downloadFile(String fileHash, long fileSize) {
         downloadFile(fileHash, fileSize, false, Collections.emptySet());
     }
 
-    // Çok parametreli (multiSource / singleSource) downloadFile
     public void downloadFile(String fileHash, long fileSize, boolean multiSource, Set<PeerInfo> peers) {
         if (destinationFolder == null) {
             System.out.println("[P2PNode] Destination folder not set!");
@@ -327,13 +329,10 @@ public class P2PNode {
 
         DownloadManager dm;
         if (multiSource && peers != null && !peers.isEmpty()) {
-            // Çok kaynaklı
             dm = new MultiSourceDownloadManager(this, fileHash, fileSize, destinationFolder, peers);
             System.out.println("[P2PNode] Creating MultiSourceDownloadManager for hash=" + fileHash);
         } else {
-            // Tek kaynak
             if (peers != null && !peers.isEmpty()) {
-                // İlk peer'i alıyoruz
                 PeerInfo firstPeer = peers.iterator().next();
                 String remoteIp = firstPeer.getIpAddress();
 
@@ -341,7 +340,6 @@ public class P2PNode {
                 System.out.println("[P2PNode] Creating single-source DownloadManager for hash=" + fileHash
                         + ", from IP=" + remoteIp);
             } else {
-                // Peers boşsa, hangi IP'den indireceğimizi bilmiyoruz
                 System.out.println("[P2PNode] No known peers for file " + fileHash + " => cannot single-source download.");
                 return;
             }
@@ -355,7 +353,6 @@ public class P2PNode {
         Packet req = new Packet(Packet.PacketType.CHUNK_REQUEST, 1, getLocalIP());
         req.setFileHash(hash);
         req.setChunkIndex(index);
-        // nodeId'yi ayarla
         req.setNodeId(this.nodeId);
         sendUDP(req, ip, chunkTransferPort);
     }
@@ -364,8 +361,7 @@ public class P2PNode {
         Packet p = new Packet(Packet.PacketType.SEARCH, 2, getLocalIP());
         p.setNodeId(nodeId);
         p.setMessage(query);
-        // broadcast
-        sendUDP(p, "172.20.10.255", discoveryPort); // Broadcast adresini güncelledik
+        sendUDP(p, "172.20.10.15", discoveryPort);
         System.out.println("[P2PNode] Sent SEARCH -> " + query);
     }
 
@@ -385,7 +381,7 @@ public class P2PNode {
 
     private void chunkListener() {
         System.out.println("[P2PNode] Chunk listener on port " + chunkTransferPort);
-        byte[] buf = new byte[8192]; // 8KB buffer
+        byte[] buf = new byte[8192];
         while (!udpSocket.isClosed()) {
             try {
                 DatagramPacket dp = new DatagramPacket(buf, buf.length);

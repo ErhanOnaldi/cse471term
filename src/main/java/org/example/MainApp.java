@@ -52,22 +52,17 @@ public class MainApp extends JFrame {
 
     private void initMenu() {
         menuBar = new JMenuBar();
-
         menuFiles = new JMenu("Files");
         miConnect = new JMenuItem("Connect");
         miConnect.addActionListener(e -> onConnect());
-
         miDisconnect = new JMenuItem("Disconnect");
         miDisconnect.addActionListener(e -> onDisconnect());
-
         miExit = new JMenuItem("Exit");
         miExit.addActionListener(e -> onExit());
-
         menuFiles.add(miConnect);
         menuFiles.add(miDisconnect);
         menuFiles.addSeparator();
         menuFiles.add(miExit);
-
         menuOptions = new JMenu("Options");
         miSetRoot = new JMenuItem("Set Root Folder");
         miSetRoot.addActionListener(e -> chooseRootFolder());
@@ -77,22 +72,18 @@ public class MainApp extends JFrame {
         miExcludeSubfolders.addActionListener(e -> excludeSubfoldersDialog());
         miExcludeMasks = new JMenuItem("Exclude Download Masks...");
         miExcludeMasks.addActionListener(e -> excludeMasksDialog());
-
         menuOptions.add(miSetRoot);
         menuOptions.add(miSetDest);
         menuOptions.addSeparator();
         menuOptions.add(miExcludeSubfolders);
         menuOptions.add(miExcludeMasks);
-
         menuHelp = new JMenu("Help");
         miAbout = new JMenuItem("About");
         miAbout.addActionListener(e -> showAboutDialog());
         menuHelp.add(miAbout);
-
         menuBar.add(menuFiles);
         menuBar.add(menuOptions);
         menuBar.add(menuHelp);
-
         setJMenuBar(menuBar);
     }
 
@@ -122,14 +113,9 @@ public class MainApp extends JFrame {
         tblDownloads = new JTable(downloadModel);
         JScrollPane scrollDownloads = new JScrollPane(tblDownloads);
 
-        JSplitPane splitPane = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT,
-                scrollResults,
-                scrollDownloads
-        );
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollResults, scrollDownloads);
         splitPane.setDividerLocation(500);
         add(splitPane, BorderLayout.CENTER);
-
         btnDownload = new JButton("Download Selected");
         btnDownload.addActionListener(e -> onDownloadSelected());
         add(btnDownload, BorderLayout.SOUTH);
@@ -141,9 +127,7 @@ public class MainApp extends JFrame {
         int result = fc.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             rootFolder = fc.getSelectedFile();
-            p2pNode.setRootFolder(rootFolder);
-            JOptionPane.showMessageDialog(this,
-                    "Root folder set: " + rootFolder.getAbsolutePath());
+            p2pNode.setRootFolder(rootFolder);JOptionPane.showMessageDialog(this, "Root folder set: " + rootFolder.getAbsolutePath());
         }
     }
 
@@ -160,14 +144,12 @@ public class MainApp extends JFrame {
 
     private void excludeSubfoldersDialog() {
         if (rootFolder == null) {
-            JOptionPane.showMessageDialog(this,
-                    "Root folder not set!", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Root folder not set!", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
         List<File> subFolders = findSubfolders(rootFolder);
         if (subFolders.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "No subfolders found under root.", "Info", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No subfolders found under root.", "Info", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
@@ -178,9 +160,7 @@ public class MainApp extends JFrame {
         JList<File> jList = new JList<>(listModel);
         jList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 
-        int choice = JOptionPane.showConfirmDialog(
-                this,
-                new JScrollPane(jList), "Select Subfolders to Exclude from Sharing", JOptionPane.OK_CANCEL_OPTION
+        int choice = JOptionPane.showConfirmDialog(this, new JScrollPane(jList), "Select Subfolders to Exclude from Sharing", JOptionPane.OK_CANCEL_OPTION
         );
         if (choice == JOptionPane.OK_OPTION) {
             List<File> selected = jList.getSelectedValuesList();
@@ -188,8 +168,7 @@ public class MainApp extends JFrame {
                 excludedSubfolders.add(f);
             }
             p2pNode.setExcludedSubfolders(excludedSubfolders);
-            JOptionPane.showMessageDialog(this,
-                    "Excluded " + selected.size() + " subfolder(s).");
+            JOptionPane.showMessageDialog(this, "Excluded " + selected.size() + " subfolder(s).");
         }
     }
 
@@ -245,7 +224,6 @@ public class MainApp extends JFrame {
                 JOptionPane.INFORMATION_MESSAGE);
     }
 
-    // -------------- Search --------------
     private void onSearch() {
         String query = txtSearch.getText().trim();
         if (query.isEmpty()) {
@@ -278,7 +256,6 @@ public class MainApp extends JFrame {
         }
     }
 
-    // -------------- Download --------------
     private void onDownloadSelected() {
         int row = tblResults.getSelectedRow();
         if (row < 0) {
@@ -299,15 +276,13 @@ public class MainApp extends JFrame {
         try {
             size = Long.parseLong(fileSizeStr);
         } catch (NumberFormatException ex) {
-            size = 2L * 1024L * 1024L; // Default 2 MB
+            size = 2L * 1024L * 1024L;
         }
 
-        // İndirme tablosuna satır ekle (GUI için)
         int newRow = downloadModel.getRowCount();
         downloadModel.addRow(new Object[]{ fileHash, "0.0" });
         downloadRowMap.put(fileHash, newRow);
 
-        // 1) Bu fileHash'i paylaşan peer(ler) var mı?
         Set<PeerInfo> peers = p2pNode.getPeersForFile(fileHash);
         if (peers.isEmpty()) {
             JOptionPane.showMessageDialog(this,
@@ -315,15 +290,11 @@ public class MainApp extends JFrame {
             return;
         }
 
-        // 2) Tek kaynak indiriyorsak, bir peer seçiyoruz (örnek: ilk peer)
         PeerInfo chosenPeer = peers.iterator().next();
 
-        // 3) Download başlat (tek kaynak => multiSource = false)
         p2pNode.downloadFile(fileHash, size, false, Collections.singleton(chosenPeer));
 
-        JOptionPane.showMessageDialog(this,
-                "Download started for: " + fileName + "\nHash=" + fileHash
-                        + "\nFrom=" + chosenPeer.getIpAddress());
+        JOptionPane.showMessageDialog(this, "Download started for: " + fileName + "\nHash=" + fileHash + "\nFrom=" + chosenPeer.getIpAddress());
     }
 
     private boolean matchesExcludeMask(String fileName) {
@@ -357,7 +328,6 @@ public class MainApp extends JFrame {
         });
     }
 
-    // ---------------------------------------------------------
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             MainApp app = new MainApp();

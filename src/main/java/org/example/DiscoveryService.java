@@ -32,7 +32,7 @@ public class DiscoveryService implements Runnable {
 
             while (running) {
                 try {
-                    byte[] buf = new byte[256 * 1024];
+                    byte[] buf = new byte[4 * 1024];
                     DatagramPacket dp = new DatagramPacket(buf, buf.length);
                     socket.receive(dp);
 
@@ -51,7 +51,7 @@ public class DiscoveryService implements Runnable {
                     }
 
                 } catch (SocketTimeoutException e) {
-                    // Normal durum, devam et
+                    // no problemo
                 }
 
                 long now = System.currentTimeMillis();
@@ -90,13 +90,10 @@ public class DiscoveryService implements Runnable {
         try {
             Packet pkt = new Packet(Packet.PacketType.DISCOVERY, 2, getLocalIP());
             pkt.setMessage("Hello from " + getLocalIP());
-            // nodeId'yi ayarla
             pkt.setNodeId(node.getNodeId());
             byte[] data = pkt.toBytes();
 
-            DatagramPacket dp = new DatagramPacket(
-                    data, data.length,
-                    InetAddress.getByName("255.255.255.255"), port
+            DatagramPacket dp = new DatagramPacket(data, data.length, InetAddress.getByName("172.20.10.15"), port
             );
             socket.send(dp);
 
@@ -112,11 +109,10 @@ public class DiscoveryService implements Runnable {
 
     private void forwardPacket(Packet pkt) {
         try {
-            // nodeId'yi değiştirmeyin, orijinal göndericinin nodeId'si korunmalı
             byte[] data = pkt.toBytes();
             DatagramPacket dp = new DatagramPacket(
                     data, data.length,
-                    InetAddress.getByName("255.255.255.255"), port
+                    InetAddress.getByName("172.20.10.15"), port
             );
             socket.send(dp);
 
