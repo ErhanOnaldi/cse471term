@@ -111,8 +111,7 @@ public class Packet {
         byte[] nodeIdBytes = (nodeId != null) ? nodeId.getBytes(StandardCharsets.UTF_8) : new byte[0];
         int nodeIdLen = nodeIdBytes.length;
 
-        int totalSize = 16
-                + 8
+        int totalSize = 4 + 4 + 4 + 4 + 8 // type + seqNumber + ttl + chunkIndex + fileSize
                 + 4 + sourceIpLen
                 + 4 + fileHashLen
                 + 4 + chunkDataLen
@@ -128,10 +127,14 @@ public class Packet {
         buffer.putLong(fileSize);
 
         buffer.putInt(sourceIpLen);
-        buffer.put(sourceIPBytes);
+        if (sourceIpLen > 0) {
+            buffer.put(sourceIPBytes);
+        }
 
         buffer.putInt(fileHashLen);
-        buffer.put(fileHashBytes);
+        if (fileHashLen > 0) {
+            buffer.put(fileHashBytes);
+        }
 
         buffer.putInt(chunkDataLen);
         if (chunkDataLen > 0) {
@@ -139,8 +142,9 @@ public class Packet {
         }
 
         buffer.putInt(msgLen);
-        buffer.put(msgBytes);
-
+        if (msgLen > 0) {
+            buffer.put(msgBytes);
+        }
 
         buffer.putInt(nodeIdLen);
         if (nodeIdLen > 0) {

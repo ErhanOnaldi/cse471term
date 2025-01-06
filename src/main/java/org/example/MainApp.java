@@ -83,6 +83,7 @@ public class MainApp extends JFrame {
         menuOptions.addSeparator();
         menuOptions.add(miExcludeSubfolders);
         menuOptions.add(miExcludeMasks);
+
         menuHelp = new JMenu("Help");
         miAbout = new JMenuItem("About");
         miAbout.addActionListener(e -> showAboutDialog());
@@ -104,6 +105,7 @@ public class MainApp extends JFrame {
         topPanel.add(txtSearch);
         topPanel.add(btnSearch);
         add(topPanel, BorderLayout.NORTH);
+
         tblModel = new DefaultTableModel(new String[]{"File Name", "File Hash", "File Size"}, 0) {
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -111,6 +113,7 @@ public class MainApp extends JFrame {
         };
         tblResults = new JTable(tblModel);
         JScrollPane scrollResults = new JScrollPane(tblResults);
+
         downloadModel = new DefaultTableModel(new String[]{"File Hash", "Progress (%)"}, 0) {
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -118,6 +121,7 @@ public class MainApp extends JFrame {
         };
         tblDownloads = new JTable(downloadModel);
         JScrollPane scrollDownloads = new JScrollPane(tblDownloads);
+
         JSplitPane splitPane = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
                 scrollResults,
@@ -125,10 +129,12 @@ public class MainApp extends JFrame {
         );
         splitPane.setDividerLocation(500);
         add(splitPane, BorderLayout.CENTER);
+
         btnDownload = new JButton("Download Selected");
         btnDownload.addActionListener(e -> onDownloadSelected());
         add(btnDownload, BorderLayout.SOUTH);
     }
+
     private void chooseRootFolder() {
         JFileChooser fc = new JFileChooser();
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -152,7 +158,6 @@ public class MainApp extends JFrame {
         }
     }
 
-    // -------------- Exclude Subfolders & Masks --------------
     private void excludeSubfoldersDialog() {
         if (rootFolder == null) {
             JOptionPane.showMessageDialog(this,
@@ -264,7 +269,7 @@ public class MainApp extends JFrame {
         for (String line : lines) {
             if (line.trim().isEmpty()) continue;
             String[] parts = line.split("\\|");
-            if (parts.length >= 2) {
+            if (parts.length >= 3) { // File name, hash, size
                 String fName = parts[0];
                 String fHash = parts[1];
                 String fSize = (parts.length >= 3) ? parts[2] : "?";
@@ -294,15 +299,31 @@ public class MainApp extends JFrame {
         try {
             size = Long.parseLong(fileSizeStr);
         } catch (NumberFormatException ex) {
-            size = 2L * 1024L * 1024L;
+            size = 2L * 1024L * 1024L; // Default 2 MB
         }
 
+        // İndirme tablosuna satır ekle (GUI için)
         int newRow = downloadModel.getRowCount();
         downloadModel.addRow(new Object[]{ fileHash, "0.0" });
         downloadRowMap.put(fileHash, newRow);
-        p2pNode.downloadFile(fileHash, size);
+
+        // 1) Bu fileHash'i paylaşan peer(ler) var mı?
+        Set<PeerInfo> peers = p2pNode.getPeersForFile(fileHash);
+        if (peers.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "No peers found for: " + fileName + " (hash=" + fileHash + ")");
+            return;
+        }
+
+        // 2) Tek kaynak indiriyorsak, bir peer seçiyoruz (örnek: ilk peer)
+        PeerInfo chosenPeer = peers.iterator().next();
+
+        // 3) Download başlat (tek kaynak => multiSource = false)
+        p2pNode.downloadFile(fileHash, size, false, Collections.singleton(chosenPeer));
+
         JOptionPane.showMessageDialog(this,
-                "Download started for: " + fileName + "\nHash=" + fileHash);
+                "Download started for: " + fileName + "\nHash=" + fileHash
+                        + "\nFrom=" + chosenPeer.getIpAddress());
     }
 
     private boolean matchesExcludeMask(String fileName) {
@@ -325,6 +346,7 @@ public class MainApp extends JFrame {
         }
         return false;
     }
+
     public void updateDownloadProgress(String fileHash, double percent) {
         SwingUtilities.invokeLater(() -> {
             Integer rowIndex = downloadRowMap.get(fileHash);

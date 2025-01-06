@@ -38,8 +38,14 @@ public class P2PNode {
     public void setGuiRef(MainApp gui) {
         this.guiRef = gui;
     }
+
     public MainApp getGuiRef() {
         return this.guiRef;
+    }
+
+    // nodeId getter'ı ekliyoruz
+    public String getNodeId() {
+        return nodeId;
     }
 
     public synchronized void connect() {
@@ -98,6 +104,7 @@ public class P2PNode {
     public void setRootFolder(File root) {
         this.rootFolder = root;
     }
+
     public File getRootFolder() {
         return rootFolder;
     }
@@ -105,6 +112,7 @@ public class P2PNode {
     public void setDestinationFolder(File dest) {
         this.destinationFolder = dest;
     }
+
     public File getDestinationFolder() {
         return destinationFolder;
     }
@@ -151,12 +159,13 @@ public class P2PNode {
 
     public void handleIncomingPacket(Packet pkt) {
         if (pkt.getNodeId().equalsIgnoreCase(this.nodeId)) {
-            return;
+            return; // Kendi paketini işlemeden çık
         }
         System.out.println(">> [P2PNode] Received " + pkt.getType()
                 + " seq=" + pkt.getSeqNumber()
                 + " ttl=" + pkt.getTtl()
-                + " from=" + pkt.getSourceIP());
+                + " from=" + pkt.getSourceIP()
+                + " nodeId=" + pkt.getNodeId());
 
         switch (pkt.getType()) {
             case DISCOVERY:
@@ -184,7 +193,7 @@ public class P2PNode {
     }
 
     private void handleSearchRequest(Packet pkt) {
-        if (pkt.getSourceIP().equalsIgnoreCase(getLocalIP())) {return;}
+        if (pkt.getSourceIP().equalsIgnoreCase(getLocalIP())) { return; }
         String query = pkt.getMessage().toLowerCase();
         List<FileMetadata> results = new ArrayList<>();
         for (FileMetadata fm : sharedFiles.values()) {
@@ -202,6 +211,8 @@ public class P2PNode {
             Packet resp = new Packet(Packet.PacketType.SEARCH_RESPONSE, 1, getLocalIP());
             resp.setMessage(sb.toString());
             resp.setSeqNumber(Packet.getNextSeqNumber());
+            // nodeId'yi ayarla
+            resp.setNodeId(this.nodeId);
             sendUDP(resp, pkt.getSourceIP(), discoveryPort);
         }
     }
@@ -245,6 +256,8 @@ public class P2PNode {
         resp.setChunkIndex(index);
         resp.setChunkData(chunkData);
         resp.setFileSize(fm.getFileSize());
+        // nodeId'yi ayarla
+        resp.setNodeId(this.nodeId);
 
         sendUDP(resp, pkt.getSourceIP(), chunkTransferPort);
         System.out.println("[P2PNode] Sent CHUNK_RESPONSE (hash=" + hash
@@ -278,12 +291,17 @@ public class P2PNode {
         }
     }
 
+    // Yeni yardımcı metod: filePeers içinden o dosyayı paylaşan peer set'ini döndürür
+    public Set<PeerInfo> getPeersForFile(String fileHash) {
+        return filePeers.getOrDefault(fileHash, Collections.emptySet());
+    }
+
+    // Tek parametreli downloadFile:
     public void downloadFile(String fileHash, long fileSize) {
-        // Varsayılan: Tek kaynak
-        // multiSource = false, peers = boş set
         downloadFile(fileHash, fileSize, false, Collections.emptySet());
     }
 
+    // Çok parametreli (multiSource / singleSource) downloadFile
     public void downloadFile(String fileHash, long fileSize, boolean multiSource, Set<PeerInfo> peers) {
         if (destinationFolder == null) {
             System.out.println("[P2PNode] Destination folder not set!");
@@ -296,11 +314,24 @@ public class P2PNode {
 
         DownloadManager dm;
         if (multiSource && peers != null && !peers.isEmpty()) {
+            // Çok kaynaklı
             dm = new MultiSourceDownloadManager(this, fileHash, fileSize, destinationFolder, peers);
             System.out.println("[P2PNode] Creating MultiSourceDownloadManager for hash=" + fileHash);
         } else {
-            dm = new DownloadManager(this, fileHash, fileSize, destinationFolder);
-            System.out.println("[P2PNode] Creating single-source DownloadManager for hash=" + fileHash);
+            // Tek kaynak
+            if (peers != null && !peers.isEmpty()) {
+                // İlk peer'i alıyoruz
+                PeerInfo firstPeer = peers.iterator().next();
+                String remoteIp = firstPeer.getIpAddress();
+
+                dm = new DownloadManager(this, fileHash, fileSize, destinationFolder, remoteIp);
+                System.out.println("[P2PNode] Creating single-source DownloadManager for hash=" + fileHash
+                        + ", from IP=" + remoteIp);
+            } else {
+                // Peers boşsa, hangi IP'den indireceğimizi bilmiyoruz
+                System.out.println("[P2PNode] No known peers for file " + fileHash + " => cannot single-source download.");
+                return;
+            }
         }
         activeDownloads.put(fileHash, dm);
 
@@ -311,6 +342,8 @@ public class P2PNode {
         Packet req = new Packet(Packet.PacketType.CHUNK_REQUEST, 1, getLocalIP());
         req.setFileHash(hash);
         req.setChunkIndex(index);
+        // nodeId'yi ayarla
+        req.setNodeId(this.nodeId);
         sendUDP(req, ip, chunkTransferPort);
     }
 
@@ -318,6 +351,7 @@ public class P2PNode {
         Packet p = new Packet(Packet.PacketType.SEARCH, 2, getLocalIP());
         p.setNodeId(nodeId);
         p.setMessage(query);
+        // broadcast
         sendUDP(p, "255.255.255.255", discoveryPort);
         System.out.println("[P2PNode] Sent SEARCH -> " + query);
     }

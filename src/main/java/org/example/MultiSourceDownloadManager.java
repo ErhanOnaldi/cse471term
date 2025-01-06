@@ -17,7 +17,8 @@ public class MultiSourceDownloadManager extends DownloadManager {
             File destFolder,
             Set<PeerInfo> peers
     ) {
-        super(node, fileHash, fileSize, destFolder);
+
+        super(node, fileHash, fileSize, destFolder, "MULTIPLE");
 
         this.peerList = new ArrayList<>(peers);
     }
@@ -25,17 +26,12 @@ public class MultiSourceDownloadManager extends DownloadManager {
     @Override
     public void startDownload() {
         isDownloading = true;
-        System.out.println("[MultiSourceDM] Start multi-source download: hash="
-                + fileHash + ", totalChunks=" + totalChunks
-                + ", #peers=" + peerList.size());
+        System.out.println("[MultiSourceDM] Start multi-source download: " + "hash=" + fileHash + ", totalChunks=" + totalChunks + ", #peers=" + peerList.size());
 
         for (int i = 0; i < totalChunks; i++) {
-            // Rastgele veya round-robin peer seç
             PeerInfo selectedPeer = pickRandomPeer();
-
             System.out.println("[MultiSourceDM] Requesting chunk " + i
                     + " from " + selectedPeer.getIpAddress());
-
 
             node.requestChunk(selectedPeer.getIpAddress(), fileHash, i);
 
@@ -63,6 +59,7 @@ public class MultiSourceDownloadManager extends DownloadManager {
             finalizeDownload();
         }
     }
+
     @Override
     protected void finalizeDownload() {
         isDownloading = false;
@@ -80,6 +77,7 @@ public class MultiSourceDownloadManager extends DownloadManager {
         }
         System.out.println("[MultiSourceDM] Download complete, hash=" + fileHash);
     }
+
     private PeerInfo pickRandomPeer() {
         int idx = ThreadLocalRandom.current().nextInt(peerList.size());
         return peerList.get(idx);

@@ -51,7 +51,7 @@ public class DiscoveryService implements Runnable {
                     }
 
                 } catch (SocketTimeoutException e) {
-                    //asdasfamans
+                    // Normal durum, devam et
                 }
 
                 long now = System.currentTimeMillis();
@@ -90,6 +90,8 @@ public class DiscoveryService implements Runnable {
         try {
             Packet pkt = new Packet(Packet.PacketType.DISCOVERY, 2, getLocalIP());
             pkt.setMessage("Hello from " + getLocalIP());
+            // nodeId'yi ayarla
+            pkt.setNodeId(node.getNodeId());
             byte[] data = pkt.toBytes();
 
             DatagramPacket dp = new DatagramPacket(
@@ -98,7 +100,7 @@ public class DiscoveryService implements Runnable {
             );
             socket.send(dp);
 
-            String key = getLocalIP() + ":" + pkt.getSeqNumber();
+            String key = pkt.getNodeId() + ":" + pkt.getSeqNumber();
             seenPackets.add(key);
 
             System.out.println("[DiscoveryService] Sent HELLO seq=" + pkt.getSeqNumber());
@@ -110,6 +112,7 @@ public class DiscoveryService implements Runnable {
 
     private void forwardPacket(Packet pkt) {
         try {
+            // nodeId'yi değiştirmeyin, orijinal göndericinin nodeId'si korunmalı
             byte[] data = pkt.toBytes();
             DatagramPacket dp = new DatagramPacket(
                     data, data.length,
@@ -117,7 +120,7 @@ public class DiscoveryService implements Runnable {
             );
             socket.send(dp);
 
-            String forwardKey = pkt.getSourceIP() + ":" + pkt.getSeqNumber();
+            String forwardKey = pkt.getNodeId() + ":" + pkt.getSeqNumber();
             seenPackets.add(forwardKey);
 
             System.out.println("[DiscoveryService] Forwarded seq=" + pkt.getSeqNumber()
@@ -134,6 +137,7 @@ public class DiscoveryService implements Runnable {
             socket.close();
         }
     }
+
     public static String getEffectiveLocalIP() {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress("google.com", 80), 3000);
@@ -144,10 +148,7 @@ public class DiscoveryService implements Runnable {
         }
     }
 
-
     private String getLocalIP() {
-       return getEffectiveLocalIP();
+        return getEffectiveLocalIP();
     }
 }
-
-
