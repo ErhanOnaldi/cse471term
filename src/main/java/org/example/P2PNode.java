@@ -82,7 +82,7 @@ public class P2PNode {
             try {
                 discoveryThread.join(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                //skip this.
             }
             discoveryThread = null;
         }
@@ -197,19 +197,22 @@ public class P2PNode {
     private void handleDiscovery(Packet pkt) {
         String sourceIP = pkt.getSourceIP();
         String sourceNodeId = pkt.getNodeId();
-        System.out.println("[P2PNode] Handling Discovery from " + sourceIP + " [nodeId=" + sourceNodeId + "]");
+
         if (sourceNodeId.equalsIgnoreCase(this.nodeId)) {
             return;
         }
-        if (!sourceNodeId.equals(this.nodeId)) {
-            PeerInfo peer = new PeerInfo(sourceIP, 0);
-            if (!discoveredPeers.contains(peer)) {
-                discoveredPeers.add(peer);
-                System.out.println("[P2PNode] Discovered new peer: " + peer.getIpAddress());
-
+        synchronized (discoveredPeers) {
+            boolean alreadyDiscovered = discoveredPeers.stream()
+                    .anyMatch(peer -> peer.getIpAddress().equals(sourceIP));
+            if (alreadyDiscovered) {
+                return;
             }
+            PeerInfo peer = new PeerInfo(sourceIP, 0);
+            discoveredPeers.add(peer);
+            System.out.println("[P2PNode] Discovered new peer: " + peer.getIpAddress());
         }
     }
+
 
     private void handleSearchRequest(Packet pkt) {
         if (pkt.getSourceIP().equalsIgnoreCase(getLocalIP())) { return; }
