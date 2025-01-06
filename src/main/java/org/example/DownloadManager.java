@@ -15,7 +15,12 @@ public class DownloadManager {
     protected byte[][] chunkBuffers;
     protected int chunksReceived;
     protected boolean isDownloading;
+
+    // İndirme yapılacak remote peer'ın IP'si
     private final String remotePeerIP;
+
+    // CHUNK_SIZE'ı 4KB olarak tanımlayın
+    private static final int CHUNK_SIZE = 4 * 1024; // 4KB
 
     public DownloadManager(P2PNode node, String fileHash, long fileSize, File destFolder, String remotePeerIP) {
         this.node = node;
@@ -24,8 +29,7 @@ public class DownloadManager {
         this.destinationFolder = destFolder;
         this.remotePeerIP = remotePeerIP;
 
-        final int CHUNK_SIZE = 256 * 1024;
-        this.totalChunks = (int)Math.ceil((double)fileSize / CHUNK_SIZE);
+        this.totalChunks = (int) Math.ceil((double) fileSize / CHUNK_SIZE);
         if (this.totalChunks <= 0) this.totalChunks = 1;
 
         this.chunkBuffers = new byte[totalChunks][];
@@ -39,35 +43,63 @@ public class DownloadManager {
                 + ", size=" + fileSize + ", totalChunks=" + totalChunks
                 + ", from=" + remotePeerIP);
 
-        // Artık her chunk isteğini "remotePeerIP" üzerinden yapıyoruz
+        // Her chunk isteğini "remotePeerIP" üzerinden yapıyoruz
         for (int i = 0; i < totalChunks; i++) {
-            node.requestChunk(remotePeerIP, fileHash, i);
+            requestChunkWithRetry(i);
             try {
-                Thread.sleep(50);
+                Thread.sleep(50); // İsteği belli aralıklarla gönderiyoruz
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
     }
 
+    private void requestChunkWithRetry(int chunkIndex) {
+        final int MAX_RETRIES = 5;
+        final int RETRY_DELAY_MS = 1000;
+
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            node.requestChunk(remotePeerIP, fileHash, chunkIndex);
+            System.out.println("[DownloadManager] Requested chunk " + chunkIndex + ", attempt " + attempt);
+
+            // Basit bir bekleme mekanizması (gerçek bir zaman aşımı mekanizması daha iyi olur)
+            try {
+                Thread.sleep(RETRY_DELAY_MS);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            if (chunkBuffers[chunkIndex] != null) {
+                System.out.println("[DownloadManager] Chunk " + chunkIndex + " received.");
+                break;
+            }
+
+            if (attempt == MAX_RETRIES) {
+                System.out.println("[DownloadManager] Failed to download chunk " + chunkIndex + " after " + MAX_RETRIES + " attempts.");
+            }
+        }
+    }
+
     public synchronized void handleChunkData(int index, byte[] data) {
         if (!isDownloading) return;
-        if (index < 0 || index >= totalChunks) return;
+        if (index < 0 || index >= totalChunks) {
+            System.out.println("[DownloadManager] Invalid chunk index: " + index);
+            return;
+        }
 
-        chunkBuffers[index] = data;
-        chunksReceived++;
+        if (chunkBuffers[index] == null) { // Aynı chunk tekrar işlenmesin
+            chunkBuffers[index] = data;
+            chunksReceived++;
+            System.out.println("[DownloadManager] Received chunk " + index + "/" + (totalChunks - 1));
 
-        double percent = (chunksReceived * 100.0) / totalChunks;
+            double percent = (chunksReceived * 100.0) / totalChunks;
+            node.getGuiRef().updateDownloadProgress(fileHash, percent);
 
-        // 1) Konsol Log
-        System.out.printf("[DownloadManager] chunk %d/%d (%.2f%%)\n",
-                chunksReceived, totalChunks, percent);
-
-        // 2) GUI'ye haber ver
-        node.getGuiRef().updateDownloadProgress(fileHash, percent);
-
-        if (chunksReceived == totalChunks) {
-            finalizeDownload();
+            if (chunksReceived == totalChunks) {
+                finalizeDownload();
+            }
+        } else {
+            System.out.println("[DownloadManager] Duplicate chunk received: " + index);
         }
     }
 
@@ -86,5 +118,6 @@ public class DownloadManager {
             e.printStackTrace();
         }
         System.out.println("[DownloadManager] Download complete: hash=" + fileHash);
+        node.getGuiRef().updateDownloadProgress(fileHash, 100.0);
     }
 }

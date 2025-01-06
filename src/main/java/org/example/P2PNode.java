@@ -8,6 +8,9 @@ import java.util.concurrent.Executors;
 
 public class P2PNode {
 
+    // CHUNK_SIZE sabitini 4KB olarak tanımlayın
+    private static final int CHUNK_SIZE = 4 * 1024; // 4KB
+
     private File rootFolder;
     private File destinationFolder;
     private boolean isConnected;
@@ -43,7 +46,7 @@ public class P2PNode {
         return this.guiRef;
     }
 
-    // nodeId getter'ı ekliyoruz
+    // nodeId getter'ı
     public String getNodeId() {
         return nodeId;
     }
@@ -169,6 +172,7 @@ public class P2PNode {
 
         switch (pkt.getType()) {
             case DISCOVERY:
+                handleDiscovery(pkt);
                 break;
 
             case SEARCH:
@@ -190,6 +194,11 @@ public class P2PNode {
             default:
                 break;
         }
+    }
+
+    private void handleDiscovery(Packet pkt) {
+        // Discovery paketini işleyin (örn. HELLO)
+        // Örnek olarak, sadece loglayın veya gerekirse forward edin
     }
 
     private void handleSearchRequest(Packet pkt) {
@@ -243,29 +252,33 @@ public class P2PNode {
 
     private void handleChunkRequest(Packet pkt) {
         String hash = pkt.getFileHash();
-        int index = pkt.getChunkIndex();
+        int chunkIndex = pkt.getChunkIndex();
         FileMetadata fm = sharedFiles.get(hash);
         if (fm == null) {
             System.out.println("[P2PNode] We don't have file with hash=" + hash);
             return;
         }
-        byte[] chunkData = readChunkFromFile(fm.getFile(), index);
+        byte[] chunkData = readChunkFromFile(fm.getFile(), chunkIndex);
 
+        // CHUNK_SIZE'ı küçük tuttuğunuz için artık paket boyutu sınırını aştığınızdan emin olun
         Packet resp = new Packet(Packet.PacketType.CHUNK_RESPONSE, 1, getLocalIP());
         resp.setFileHash(hash);
-        resp.setChunkIndex(index);
+        resp.setChunkIndex(chunkIndex);
         resp.setChunkData(chunkData);
         resp.setFileSize(fm.getFileSize());
         // nodeId'yi ayarla
         resp.setNodeId(this.nodeId);
 
-        sendUDP(resp, pkt.getSourceIP(), chunkTransferPort);
-        System.out.println("[P2PNode] Sent CHUNK_RESPONSE (hash=" + hash
-                + ", chunk=" + index + ") to " + pkt.getSourceIP());
+        try {
+            sendUDP(resp, pkt.getSourceIP(), chunkTransferPort);
+            System.out.println("[P2PNode] Sent CHUNK_RESPONSE (hash=" + hash
+                    + ", chunk=" + chunkIndex + ") to " + pkt.getSourceIP());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private byte[] readChunkFromFile(File file, int chunkIndex) {
-        final int CHUNK_SIZE = 256 * 1024;
         long offset = (long) chunkIndex * CHUNK_SIZE;
         if (offset >= file.length()) {
             return new byte[0];
@@ -352,7 +365,7 @@ public class P2PNode {
         p.setNodeId(nodeId);
         p.setMessage(query);
         // broadcast
-        sendUDP(p, "255.255.255.255", discoveryPort);
+        sendUDP(p, "172.20.10.255", discoveryPort); // Broadcast adresini güncelledik
         System.out.println("[P2PNode] Sent SEARCH -> " + query);
     }
 
@@ -362,15 +375,17 @@ public class P2PNode {
             DatagramPacket dp = new DatagramPacket(data, data.length, InetAddress.getByName(ip), port);
             if (udpSocket != null && !udpSocket.isClosed()) {
                 udpSocket.send(dp);
+                System.out.println("[P2PNode] Sent packet type=" + pkt.getType() + " size=" + data.length + " bytes to " + ip + ":" + port);
             }
         } catch (Exception e) {
+            System.err.println("[P2PNode] Failed to send packet type=" + pkt.getType() + " to " + ip + ":" + port);
             e.printStackTrace();
         }
     }
 
     private void chunkListener() {
         System.out.println("[P2PNode] Chunk listener on port " + chunkTransferPort);
-        byte[] buf = new byte[64 * 1024];
+        byte[] buf = new byte[8192]; // 8KB buffer
         while (!udpSocket.isClosed()) {
             try {
                 DatagramPacket dp = new DatagramPacket(buf, buf.length);

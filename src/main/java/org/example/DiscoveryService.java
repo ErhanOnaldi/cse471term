@@ -32,7 +32,7 @@ public class DiscoveryService implements Runnable {
 
             while (running) {
                 try {
-                    byte[] buf = new byte[64 * 1024];
+                    byte[] buf = new byte[256 * 1024];
                     DatagramPacket dp = new DatagramPacket(buf, buf.length);
                     socket.receive(dp);
 
