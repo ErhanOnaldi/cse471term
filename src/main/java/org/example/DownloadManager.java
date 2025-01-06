@@ -15,18 +15,16 @@ public class DownloadManager {
     protected byte[][] chunkBuffers;
     protected int chunksReceived;
     protected boolean isDownloading;
-
     private final String remotePeerIP;
-
-    static final int CHUNK_SIZE = 256 * 1024;
 
     public DownloadManager(P2PNode node, String fileHash, long fileSize, File destFolder, String remotePeerIP) {
         this.node = node;
         this.fileHash = fileHash;
         this.fileSize = fileSize;
         this.destinationFolder = destFolder;
-        this.remotePeerIP = remotePeerIP;  // Burada uzak peer IP'sini tutuyoruz
+        this.remotePeerIP = remotePeerIP;
 
+        final int CHUNK_SIZE = 256 * 1024;
         this.totalChunks = (int)Math.ceil((double)fileSize / CHUNK_SIZE);
         if (this.totalChunks <= 0) this.totalChunks = 1;
 
@@ -41,6 +39,7 @@ public class DownloadManager {
                 + ", size=" + fileSize + ", totalChunks=" + totalChunks
                 + ", from=" + remotePeerIP);
 
+        // Artık her chunk isteğini "remotePeerIP" üzerinden yapıyoruz
         for (int i = 0; i < totalChunks; i++) {
             node.requestChunk(remotePeerIP, fileHash, i);
             try {
@@ -55,22 +54,20 @@ public class DownloadManager {
         if (!isDownloading) return;
         if (index < 0 || index >= totalChunks) return;
 
-        if (chunkBuffers[index] == null) {
-            chunkBuffers[index] = data;
-            chunksReceived++;
+        chunkBuffers[index] = data;
+        chunksReceived++;
 
-            double percent = (chunksReceived * 100.0) / totalChunks;
+        double percent = (chunksReceived * 100.0) / totalChunks;
 
-            // 1) Konsol Log
-            System.out.printf("[DownloadManager] chunk %d/%d (%.2f%%)\n",
-                    chunksReceived, totalChunks, percent);
+        // 1) Konsol Log
+        System.out.printf("[DownloadManager] chunk %d/%d (%.2f%%)\n",
+                chunksReceived, totalChunks, percent);
 
-            // 2) GUI'ye haber ver
-            node.getGuiRef().updateDownloadProgress(fileHash, percent);
+        // 2) GUI'ye haber ver
+        node.getGuiRef().updateDownloadProgress(fileHash, percent);
 
-            if (chunksReceived == totalChunks) {
-                finalizeDownload();
-            }
+        if (chunksReceived == totalChunks) {
+            finalizeDownload();
         }
     }
 

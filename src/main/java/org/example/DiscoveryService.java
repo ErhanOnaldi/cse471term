@@ -13,7 +13,6 @@ public class DiscoveryService implements Runnable {
     private DatagramSocket socket;
     private final Set<String> seenPackets;
     private final long broadcastIntervalMs = 5000;
-    private final String broadcastAddress = "172.20.10.255";
 
     public DiscoveryService(P2PNode node, int port) {
         this.node = node;
@@ -97,7 +96,7 @@ public class DiscoveryService implements Runnable {
 
             DatagramPacket dp = new DatagramPacket(
                     data, data.length,
-                    InetAddress.getByName(broadcastAddress), port
+                    InetAddress.getByName("255.255.255.255"), port
             );
             socket.send(dp);
 
@@ -117,7 +116,7 @@ public class DiscoveryService implements Runnable {
             byte[] data = pkt.toBytes();
             DatagramPacket dp = new DatagramPacket(
                     data, data.length,
-                    InetAddress.getByName(broadcastAddress), port
+                    InetAddress.getByName("255.255.255.255"), port
             );
             socket.send(dp);
 

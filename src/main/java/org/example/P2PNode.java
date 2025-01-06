@@ -6,8 +6,6 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static org.example.DownloadManager.CHUNK_SIZE;
-
 public class P2PNode {
 
     private File rootFolder;
@@ -25,6 +23,7 @@ public class P2PNode {
     private Map<String, DownloadManager> activeDownloads = new HashMap<>();
     private final Map<String, Set<PeerInfo>> filePeers = new HashMap<>();
     private final ExecutorService executor;
+
     private Set<File> excludedSubfolders;
     private MainApp guiRef;
 
@@ -44,7 +43,7 @@ public class P2PNode {
         return this.guiRef;
     }
 
-    // nodeId getter'ı
+    // nodeId getter'ı ekliyoruz
     public String getNodeId() {
         return nodeId;
     }
@@ -160,7 +159,7 @@ public class P2PNode {
 
     public void handleIncomingPacket(Packet pkt) {
         if (pkt.getNodeId().equalsIgnoreCase(this.nodeId)) {
-            return;
+            return; // Kendi paketini işlemeden çık
         }
         System.out.println(">> [P2PNode] Received " + pkt.getType()
                 + " seq=" + pkt.getSeqNumber()
@@ -170,7 +169,6 @@ public class P2PNode {
 
         switch (pkt.getType()) {
             case DISCOVERY:
-                // DISCOVERY paketi işlenmiyor çünkü handleIncomingPacket sadece önemli paketleri işliyor
                 break;
 
             case SEARCH:
@@ -261,16 +259,13 @@ public class P2PNode {
         // nodeId'yi ayarla
         resp.setNodeId(this.nodeId);
 
-        try {
-            sendUDP(resp, pkt.getSourceIP(), chunkTransferPort);
-            System.out.println("[P2PNode] Sent CHUNK_RESPONSE (hash=" + hash
-                    + ", chunk=" + index + ") to " + pkt.getSourceIP());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        sendUDP(resp, pkt.getSourceIP(), chunkTransferPort);
+        System.out.println("[P2PNode] Sent CHUNK_RESPONSE (hash=" + hash
+                + ", chunk=" + index + ") to " + pkt.getSourceIP());
     }
 
     private byte[] readChunkFromFile(File file, int chunkIndex) {
+        final int CHUNK_SIZE = 256 * 1024;
         long offset = (long) chunkIndex * CHUNK_SIZE;
         if (offset >= file.length()) {
             return new byte[0];
@@ -357,7 +352,7 @@ public class P2PNode {
         p.setNodeId(nodeId);
         p.setMessage(query);
         // broadcast
-        sendUDP(p, "172.20.10.255", discoveryPort); // Broadcast adresini güncelledik
+        sendUDP(p, "255.255.255.255", discoveryPort);
         System.out.println("[P2PNode] Sent SEARCH -> " + query);
     }
 

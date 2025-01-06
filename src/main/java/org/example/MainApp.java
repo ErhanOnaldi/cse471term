@@ -278,6 +278,7 @@ public class MainApp extends JFrame {
         }
     }
 
+    // -------------- Download --------------
     private void onDownloadSelected() {
         int row = tblResults.getSelectedRow();
         if (row < 0) {
@@ -356,7 +357,7 @@ public class MainApp extends JFrame {
         });
     }
 
-
+    // ---------------------------------------------------------
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             MainApp app = new MainApp();
